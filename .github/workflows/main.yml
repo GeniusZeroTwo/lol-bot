@@ -1,0 +1,39 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+# Opt all jobs in this workflow into Node.js 24 immediately.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install NuGet
+      uses: nuget/setup-nuget@v1  # 修正为 v1（v3 不存在）
+    - name: Restore NuGet packages
+      run: nuget restore HopiBot/HopiBot.csproj -SolutionDirectory "$(pwd)"
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+    - name: Build
+      run: msbuild HopiBot/HopiBot.csproj /t:Rebuild /p:Configuration=Release
+    - name: Create artifacts directory
+      # Use a Windows-safe command to create the directory idempotently
+      run: New-Item -ItemType Directory -Force artifacts
+    - name: Copy build outputs to artifacts
+      run: |
+        robocopy "HopiBot\bin\Release" "artifacts" /S /E
+      continue-on-error: true
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: HopiBot-Release
+        path: artifacts/
+        retention-days: 30

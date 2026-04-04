@@ -12,7 +12,6 @@ using HopiBot.LCU;
 using HopiBot.LCU.bo;
 using HopiBot.Enum;
 using HopiBot.Hack;
-using Application = System.Windows.Application;
 using MessageBox = System.Windows.MessageBox;
 using Timer = System.Timers.Timer;
 using System.Windows.Controls;
@@ -32,12 +31,6 @@ namespace HopiBot
         public MainWindow()
         {
             InitializeComponent();
-            if (!ClientApi.CheckConnection())
-            {
-                MessageBox.Show("请先打开游戏客户端");
-                Application.Current.Shutdown();
-                return;
-            }
             Init();
             UpdateInfo();
         }

@@ -37,13 +37,6 @@ namespace HopiBot
 
         private void Init()
         {
-            var champs = ClientApi.GetAllChampions();
-            ChampCb.ItemsSource = champs;
-            ChampCb.SelectedItem = champs.Find(c => c.Name == "麦林炮手");
-
-            _previousXp = ClientApi.GetMyXp();
-            _xpUntilNextLevel = ClientApi.GetMyXpUntilNextLevel();
-
             var hook = Hook.GlobalEvents();
             hook.KeyDown += (sender, e) =>
             {
@@ -58,6 +51,30 @@ namespace HopiBot
                     tracker.Track();
                 }
             };
+
+            RefreshClientData(false);
+        }
+
+        private bool RefreshClientData(bool showMessage = true)
+        {
+            if (!ClientApi.CheckConnection())
+            {
+                if (showMessage)
+                {
+                    MessageBox.Show("请先打开游戏客户端");
+                }
+                ChampCb.ItemsSource = new List<Champion>();
+                ChampCb.SelectedIndex = -1;
+                return false;
+            }
+
+            var champs = ClientApi.GetAllChampions();
+            ChampCb.ItemsSource = champs;
+            ChampCb.SelectedItem = champs.Find(c => c.Name == "麦林炮手");
+
+            _previousXp = ClientApi.GetMyXp();
+            _xpUntilNextLevel = ClientApi.GetMyXpUntilNextLevel();
+            return true;
         }
 
         private void GetTeamInfo(object sender, RoutedEventArgs e)
@@ -127,6 +144,8 @@ namespace HopiBot
         {
             if (_botThread == null)
             {
+                if (!RefreshClientData()) return;
+
                 if (ChampCb.SelectedIndex == -1)
                 {
                     MessageBox.Show("请选择英雄");

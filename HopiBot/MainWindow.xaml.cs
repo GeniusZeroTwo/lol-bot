@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -27,6 +29,10 @@ namespace HopiBot
         private int _previousXp = 0;
         private int _xpUntilNextLevel = 0;
         private int _earnedXp = 0;
+        private static readonly IntPtr HwndTop = new IntPtr(0);
+        private const uint SwpNosize = 0x0001;
+        private const uint SwpNomove = 0x0002;
+        private const uint SwpShowwindow = 0x0040;
 
         public MainWindow()
         {
@@ -144,6 +150,7 @@ namespace HopiBot
         {
             if (_botThread == null)
             {
+                if (!PrepareAndLaunchLeagueClient()) return;
                 if (!RefreshClientData()) return;
 
                 if (ChampCb.SelectedIndex == -1)
@@ -177,6 +184,137 @@ namespace HopiBot
             _botThread?.Join();
             _botThread = null;
         }
+
+
+        private bool PrepareAndLaunchLeagueClient()
+        {
+            var weGame = Process.GetProcessesByName("wegame").FirstOrDefault()
+                         ?? Process.GetProcessesByName("WeGame").FirstOrDefault();
+            if (weGame == null || weGame.MainWindowHandle == IntPtr.Zero)
+            {
+                MessageBox.Show("未找到 WeGame 进程，请先启动 WeGame");
+                return false;
+            }
+
+            if (!ShowAndFocusWindow(weGame.MainWindowHandle))
+            {
+                MessageBox.Show("无法激活 WeGame 窗口");
+                return false;
+            }
+            Thread.Sleep(1000);
+
+            Controller.RightClick(new RatioPoint(27, 300));
+            Thread.Sleep(1000);
+
+            if (!TryRightClickStartText(weGame.MainWindowHandle))
+            {
+                MessageBox.Show("未在指定区域识别到“启动”文字");
+                return false;
+            }
+            Thread.Sleep(1000);
+
+            if (!WaitForLeagueClientStart(60))
+            {
+                MessageBox.Show("等待英雄联盟客户端启动超时");
+                return false;
+            }
+
+            Thread.Sleep(3000);
+            return true;
+        }
+
+        private bool TryRightClickStartText(IntPtr weGameWindow)
+        {
+            const int searchLeft = 900;
+            const int searchTop = 600;
+            const int searchRight = 1280;
+            const int searchBottom = 720;
+
+            var foundPoint = System.Drawing.Point.Empty;
+            EnumChildWindows(weGameWindow, (child, _) =>
+            {
+                var text = GetWindowTextByHandle(child);
+                if (string.IsNullOrWhiteSpace(text) || !text.Contains("启动"))
+                {
+                    return true;
+                }
+
+                if (!GetWindowRect(child, out var rect))
+                {
+                    return true;
+                }
+
+                var centerX = (rect.Left + rect.Right) / 2;
+                var centerY = (rect.Top + rect.Bottom) / 2;
+                if (centerX < searchLeft || centerX > searchRight || centerY < searchTop || centerY > searchBottom)
+                {
+                    return true;
+                }
+
+                foundPoint = new System.Drawing.Point(centerX, centerY);
+                return false;
+            }, IntPtr.Zero);
+
+            if (foundPoint == System.Drawing.Point.Empty)
+            {
+                return false;
+            }
+
+            Controller.RightClick(new RatioPoint(foundPoint.X, foundPoint.Y));
+            return true;
+        }
+
+        private static bool WaitForLeagueClientStart(int timeoutSeconds)
+        {
+            var endTime = DateTime.Now.AddSeconds(timeoutSeconds);
+            while (DateTime.Now < endTime)
+            {
+                var hasClientProcess = Process.GetProcessesByName("LeagueClient").Any()
+                                       || Process.GetProcessesByName("LeagueClientUx").Any();
+                if (hasClientProcess || ClientApi.CheckConnection())
+                {
+                    return true;
+                }
+                Thread.Sleep(1000);
+            }
+
+            return false;
+        }
+
+        private static bool ShowAndFocusWindow(IntPtr hWnd)
+        {
+            ShowWindow(hWnd, 5);
+            SetWindowPos(hWnd, HwndTop, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpShowwindow);
+            return SetForegroundWindow(hWnd);
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowProc lpEnumFunc, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out HopiBot.Hack.Utils.RECT lpRect);
+
+        private delegate bool EnumWindowProc(IntPtr hWnd, IntPtr lParam);
+
+        private static string GetWindowTextByHandle(IntPtr hWnd)
+        {
+            var sb = new System.Text.StringBuilder(256);
+            GetWindowText(hWnd, sb, sb.Capacity);
+            return sb.ToString();
+        }
+
 
         #region General UI Event
 

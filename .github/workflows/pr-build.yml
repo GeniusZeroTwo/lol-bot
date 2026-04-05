@@ -28,3 +28,18 @@ jobs:
 
       - name: Build solution (Release)
         run: msbuild HopiBot.sln /t:Build /p:Configuration=Release /p:Platform="Any CPU" /m
+
+      - name: Archive Release output
+        shell: pwsh
+        run: |
+          $artifactDir = "artifacts"
+          $zipPath = Join-Path $artifactDir "HopiBot-Release.zip"
+          New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path "HopiBot/bin/Release/*" -DestinationPath $zipPath
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HopiBot-Release
+          path: artifacts/HopiBot-Release.zip

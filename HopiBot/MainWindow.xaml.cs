@@ -188,15 +188,14 @@ namespace HopiBot
 
         private bool PrepareAndLaunchLeagueClient()
         {
-            var weGame = Process.GetProcessesByName("wegame").FirstOrDefault()
-                         ?? Process.GetProcessesByName("WeGame").FirstOrDefault();
-            if (weGame == null || weGame.MainWindowHandle == IntPtr.Zero)
+            var weGameWindow = FindWeGameWindow();
+            if (weGameWindow == IntPtr.Zero)
             {
-                MessageBox.Show("未找到 WeGame 进程，请先启动 WeGame");
+                MessageBox.Show("未找到 WeGame 窗口（标题: WeGame，类名: CefTopWindow）");
                 return false;
             }
 
-            if (!ShowAndFocusWindow(weGame.MainWindowHandle))
+            if (!ShowAndFocusWindow(weGameWindow))
             {
                 MessageBox.Show("无法激活 WeGame 窗口");
                 return false;
@@ -206,7 +205,7 @@ namespace HopiBot
             Controller.RightClick(new RatioPoint(27, 300));
             Thread.Sleep(1000);
 
-            if (!TryRightClickStartText(weGame.MainWindowHandle))
+            if (!TryRightClickStartText(weGameWindow))
             {
                 MessageBox.Show("未在指定区域识别到“启动”文字");
                 return false;
@@ -221,6 +220,30 @@ namespace HopiBot
 
             Thread.Sleep(3000);
             return true;
+        }
+
+        private static IntPtr FindWeGameWindow()
+        {
+            var processWindow = Process.GetProcessesByName("wegame").FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero)?.MainWindowHandle
+                                ?? Process.GetProcessesByName("WeGame").FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero)?.MainWindowHandle;
+            if (processWindow != IntPtr.Zero)
+            {
+                return processWindow;
+            }
+
+            var titleAndClass = FindWindow("CefTopWindow", "WeGame");
+            if (titleAndClass != IntPtr.Zero)
+            {
+                return titleAndClass;
+            }
+
+            var titleOnly = FindWindow(null, "WeGame");
+            if (titleOnly != IntPtr.Zero)
+            {
+                return titleOnly;
+            }
+
+            return FindWindow("CefTopWindow", null);
         }
 
         private bool TryRightClickStartText(IntPtr weGameWindow)
@@ -305,6 +328,9 @@ namespace HopiBot
 
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out HopiBot.Hack.Utils.RECT lpRect);
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
         private delegate bool EnumWindowProc(IntPtr hWnd, IntPtr lParam);
 

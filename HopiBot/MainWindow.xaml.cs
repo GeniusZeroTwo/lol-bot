@@ -202,12 +202,18 @@ namespace HopiBot
             }
             Thread.Sleep(1000);
 
-            Controller.RightClick(new RatioPoint(27, 300));
+            if (!GetWindowRect(weGameWindow, out var weGameRect))
+            {
+                MessageBox.Show("无法获取 WeGame 窗口坐标");
+                return false;
+            }
+
+            Controller.LeftClick(new RatioPoint(weGameRect.Left + 27, weGameRect.Top + 300));
             Thread.Sleep(1000);
 
-            if (!TryRightClickStartText(weGameWindow))
+            if (!TryLeftClickStartTextByOcr(weGameRect))
             {
-                MessageBox.Show("未在指定区域识别到“启动”文字");
+                MessageBox.Show("OCR 未在指定区域识别到“启动”文字");
                 return false;
             }
             Thread.Sleep(1000);
@@ -248,45 +254,80 @@ namespace HopiBot
             return FindWindow("CefTopWindow", null);
         }
 
-        private bool TryRightClickStartText(IntPtr weGameWindow)
+        private bool TryLeftClickStartTextByOcr(HopiBot.Hack.Utils.RECT weGameRect)
         {
             const int searchLeft = 900;
             const int searchTop = 600;
             const int searchRight = 1280;
             const int searchBottom = 720;
 
+            var searchRect = new System.Drawing.Rectangle(
+                weGameRect.Left + searchLeft,
+                weGameRect.Top + searchTop,
+                searchRight - searchLeft,
+                searchBottom - searchTop);
+
             var foundPoint = System.Drawing.Point.Empty;
-            EnumChildWindows(weGameWindow, (child, _) =>
+            using (var regionBitmap = new System.Drawing.Bitmap(searchRect.Width, searchRect.Height))
             {
-                var text = GetWindowTextByHandle(child);
-                if (string.IsNullOrWhiteSpace(text) || !text.Contains("启动"))
+                using (var g = System.Drawing.Graphics.FromImage(regionBitmap))
                 {
-                    return true;
+                    g.CopyFromScreen(searchRect.Location, System.Drawing.Point.Empty, searchRect.Size);
                 }
 
-                if (!GetWindowRect(child, out var rect))
+                foreach (var template in BuildStartTextTemplates())
                 {
-                    return true;
-                }
+                    using (template)
+                    {
+                        var matchPoint = HopiBot.Hack.Utils.ImageHelper.LocatePattern(regionBitmap, template, 0.55);
+                        if (matchPoint == System.Drawing.Point.Empty)
+                        {
+                            continue;
+                        }
 
-                var centerX = (rect.Left + rect.Right) / 2;
-                var centerY = (rect.Top + rect.Bottom) / 2;
-                if (centerX < searchLeft || centerX > searchRight || centerY < searchTop || centerY > searchBottom)
-                {
-                    return true;
+                        foundPoint = new System.Drawing.Point(
+                            searchRect.Left + matchPoint.X + template.Width / 2,
+                            searchRect.Top + matchPoint.Y + template.Height / 2);
+                        break;
+                    }
                 }
-
-                foundPoint = new System.Drawing.Point(centerX, centerY);
-                return false;
-            }, IntPtr.Zero);
+            }
 
             if (foundPoint == System.Drawing.Point.Empty)
             {
                 return false;
             }
 
-            Controller.RightClick(new RatioPoint(foundPoint.X, foundPoint.Y));
+            Controller.LeftClick(new RatioPoint(foundPoint.X, foundPoint.Y));
             return true;
+        }
+
+        private static IEnumerable<System.Drawing.Bitmap> BuildStartTextTemplates()
+        {
+            var fonts = new[] { "Microsoft YaHei", "SimHei", "Arial Unicode MS" };
+            var sizes = new[] { 22f, 24f, 26f, 28f, 30f, 32f };
+
+            foreach (var fontName in fonts)
+            {
+                foreach (var size in sizes)
+                {
+                    yield return RenderTextTemplate("启动", fontName, size);
+                }
+            }
+        }
+
+        private static System.Drawing.Bitmap RenderTextTemplate(string text, string fontName, float fontSize)
+        {
+            var bitmap = new System.Drawing.Bitmap(140, 70);
+            using (var g = System.Drawing.Graphics.FromImage(bitmap))
+            using (var brush = new System.Drawing.SolidBrush(System.Drawing.Color.White))
+            using (var font = new System.Drawing.Font(fontName, fontSize, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel))
+            {
+                g.Clear(System.Drawing.Color.Black);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.DrawString(text, font, brush, new System.Drawing.PointF(8, 12));
+            }
+            return bitmap;
         }
 
         private static bool WaitForLeagueClientStart(int timeoutSeconds)
@@ -322,27 +363,11 @@ namespace HopiBot
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
-
-        [DllImport("user32.dll")]
-        private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowProc lpEnumFunc, IntPtr lParam);
-
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out HopiBot.Hack.Utils.RECT lpRect);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
-
-        private delegate bool EnumWindowProc(IntPtr hWnd, IntPtr lParam);
-
-        private static string GetWindowTextByHandle(IntPtr hWnd)
-        {
-            var sb = new System.Text.StringBuilder(256);
-            GetWindowText(hWnd, sb, sb.Capacity);
-            return sb.ToString();
-        }
-
 
         #region General UI Event
 

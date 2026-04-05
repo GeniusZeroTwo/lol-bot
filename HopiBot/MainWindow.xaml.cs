@@ -30,6 +30,7 @@ namespace HopiBot
         private int _xpUntilNextLevel = 0;
         private int _earnedXp = 0;
         private static readonly IntPtr HwndTop = new IntPtr(0);
+        private static readonly IntPtr HwndTopMost = new IntPtr(-1);
         private const uint SwpNosize = 0x0001;
         private const uint SwpNomove = 0x0002;
         private const uint SwpShowwindow = 0x0040;
@@ -224,7 +225,12 @@ namespace HopiBot
                 return false;
             }
 
-            Thread.Sleep(3000);
+            if (!WaitForRClientAndClickStartGame(120))
+            {
+                MessageBox.Show("未检测到 RCLIENT 启动窗口或未匹配到“开始游戏”按钮");
+                return false;
+            }
+
             return true;
         }
 
@@ -345,6 +351,91 @@ namespace HopiBot
             }
 
             return false;
+        }
+
+        private static bool WaitForRClientAndClickStartGame(int timeoutSeconds)
+        {
+            var endTime = DateTime.Now.AddSeconds(timeoutSeconds);
+            while (DateTime.Now < endTime)
+            {
+                var rClientWindow = FindWindow("RCLIENT", "League of Legends");
+                if (rClientWindow != IntPtr.Zero)
+                {
+                    ShowAndFocusTopMostWindow(rClientWindow);
+                    if (TryClickStartGameByImage(rClientWindow))
+                    {
+                        return true;
+                    }
+                }
+
+                Thread.Sleep(5000);
+            }
+
+            return false;
+        }
+
+        private static void ShowAndFocusTopMostWindow(IntPtr hWnd)
+        {
+            ShowWindow(hWnd, 5);
+            SetWindowPos(hWnd, HwndTopMost, 0, 0, 0, 0, SwpNomove | SwpNosize | SwpShowwindow);
+            SetForegroundWindow(hWnd);
+        }
+
+        private static bool TryClickStartGameByImage(IntPtr hWnd)
+        {
+            if (!GetWindowRect(hWnd, out var windowRect))
+            {
+                return false;
+            }
+
+            var searchRect = new System.Drawing.Rectangle(
+                windowRect.Left,
+                windowRect.Top,
+                windowRect.Right - windowRect.Left,
+                windowRect.Bottom - windowRect.Top);
+            if (searchRect.Width <= 0 || searchRect.Height <= 0)
+            {
+                return false;
+            }
+
+            using (var windowBitmap = new System.Drawing.Bitmap(searchRect.Width, searchRect.Height))
+            using (var g = System.Drawing.Graphics.FromImage(windowBitmap))
+            {
+                g.CopyFromScreen(searchRect.Location, System.Drawing.Point.Empty, searchRect.Size);
+                foreach (var template in BuildStartGameTextTemplates())
+                {
+                    using (template)
+                    {
+                        var matchPoint = HopiBot.Hack.Utils.ImageHelper.LocatePattern(windowBitmap, template, 0.5);
+                        if (matchPoint == System.Drawing.Point.Empty)
+                        {
+                            continue;
+                        }
+
+                        var clickPoint = new System.Drawing.Point(
+                            searchRect.Left + matchPoint.X + template.Width / 2,
+                            searchRect.Top + matchPoint.Y + template.Height / 2);
+                        Controller.LeftClick(new RatioPoint(clickPoint.X, clickPoint.Y));
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static IEnumerable<System.Drawing.Bitmap> BuildStartGameTextTemplates()
+        {
+            var fonts = new[] { "Microsoft YaHei", "SimHei", "Arial Unicode MS" };
+            var sizes = new[] { 20f, 22f, 24f, 26f, 28f, 30f };
+
+            foreach (var fontName in fonts)
+            {
+                foreach (var size in sizes)
+                {
+                    yield return RenderTextTemplate("开始游戏", fontName, size);
+                }
+            }
         }
 
         private static bool ShowAndFocusWindow(IntPtr hWnd)

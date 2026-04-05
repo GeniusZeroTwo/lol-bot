@@ -67,7 +67,7 @@ namespace HopiBot
             {
                 if (showMessage)
                 {
-                    MessageBox.Show("请先打开游戏客户端");
+                    MessageBox.Show("无法连接游戏客户端");
                 }
                 ChampCb.ItemsSource = new List<Champion>();
                 ChampCb.SelectedIndex = -1;

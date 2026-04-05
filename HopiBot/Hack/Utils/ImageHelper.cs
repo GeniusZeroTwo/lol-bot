@@ -11,16 +11,34 @@ namespace HopiBot.Hack.Utils
 {
     public static class ImageHelper
     {
+        private static Mat ToGray(Mat input)
+        {
+            if (input.Empty())
+            {
+                return new Mat();
+            }
+
+            if (input.Channels() == 1)
+            {
+                return input.Clone();
+            }
+
+            var gray = new Mat();
+            var code = input.Channels() == 4
+                ? ColorConversionCodes.BGRA2GRAY
+                : ColorConversionCodes.BGR2GRAY;
+            Cv2.CvtColor(input, gray, code);
+            return gray;
+        }
+
         public static Point LocatePattern(Bitmap large, Bitmap pattern, double threshold = 0.3)
         {
             Mat largeImage = OpenCvSharp.Extensions.BitmapConverter.ToMat(large);
             Mat template = OpenCvSharp.Extensions.BitmapConverter.ToMat(pattern);
 
             // 将图像转换为灰度图像
-            Mat largeImageGray = new Mat();
-            Mat templateGray = new Mat();
-            Cv2.CvtColor(largeImage, largeImageGray, ColorConversionCodes.BGR2GRAY);
-            Cv2.CvtColor(template, templateGray, ColorConversionCodes.BGR2GRAY);
+            var largeImageGray = ToGray(largeImage);
+            var templateGray = ToGray(template);
 
             Mat result = new Mat();
             Cv2.MatchTemplate(largeImageGray, templateGray, result, TemplateMatchModes.CCorrNormed);
@@ -36,15 +54,15 @@ namespace HopiBot.Hack.Utils
             return new Point(matchLoc.X, matchLoc.Y);
         }
 
-        public static Point LocatePatternWithBlur(Bitmap large, Bitmap pattern, double threshold = 0.5, int blurKernel = 7)
+        public static bool TryLocatePatternWithBlur(Bitmap large, Bitmap pattern, out Point matchPoint, out double score, int blurKernel = 7)
         {
+            matchPoint = Point.Empty;
+            score = 0;
             var largeImage = OpenCvSharp.Extensions.BitmapConverter.ToMat(large);
             var template = OpenCvSharp.Extensions.BitmapConverter.ToMat(pattern);
 
-            var largeGray = new Mat();
-            var templateGray = new Mat();
-            Cv2.CvtColor(largeImage, largeGray, ColorConversionCodes.BGR2GRAY);
-            Cv2.CvtColor(template, templateGray, ColorConversionCodes.BGR2GRAY);
+            var largeGray = ToGray(largeImage);
+            var templateGray = ToGray(template);
 
             var kernelSize = blurKernel % 2 == 0 ? blurKernel + 1 : blurKernel;
             kernelSize = Math.Max(3, kernelSize);
@@ -53,15 +71,25 @@ namespace HopiBot.Hack.Utils
 
             var result = new Mat();
             Cv2.MatchTemplate(largeGray, templateGray, result, TemplateMatchModes.CCoeffNormed);
-            Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var matchLoc);
+            Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var rawMatchLoc);
+            var matchLoc = new Point(rawMatchLoc.X, rawMatchLoc.Y);
 
             Console.WriteLine($"BlurMatch MaxVal: {maxVal}, MatchLoc: {matchLoc}");
-            if (maxVal < threshold)
+            score = maxVal;
+            if (maxVal <= 0)
             {
-                return Point.Empty;
+                return false;
             }
 
-            return new Point(matchLoc.X, matchLoc.Y);
+            matchPoint = matchLoc;
+            return true;
+        }
+
+        public static Point LocatePatternWithBlur(Bitmap large, Bitmap pattern, double threshold = 0.5, int blurKernel = 7)
+        {
+            return TryLocatePatternWithBlur(large, pattern, out var matchPoint, out var score, blurKernel) && score >= threshold
+                ? matchPoint
+                : Point.Empty;
         }
 
         public static Bitmap ResizeBitmap(Bitmap originalBitmap, Size size)

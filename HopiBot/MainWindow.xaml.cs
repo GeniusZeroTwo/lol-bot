@@ -260,6 +260,8 @@ namespace HopiBot
             const int searchTop = 600;
             const int searchRight = 1280;
             const int searchBottom = 720;
+            const double matchThreshold = 0.48;
+            const int blurKernel = 9;
 
             var searchRect = new System.Drawing.Rectangle(
                 weGameRect.Left + searchLeft,
@@ -268,6 +270,7 @@ namespace HopiBot
                 searchBottom - searchTop);
 
             var foundPoint = System.Drawing.Point.Empty;
+            var bestScore = 0d;
             using (var regionBitmap = new System.Drawing.Bitmap(searchRect.Width, searchRect.Height))
             {
                 using (var g = System.Drawing.Graphics.FromImage(regionBitmap))
@@ -279,16 +282,20 @@ namespace HopiBot
                 {
                     using (template)
                     {
-                        var matchPoint = HopiBot.Hack.Utils.ImageHelper.LocatePatternWithBlur(regionBitmap, template, 0.48, 9);
-                        if (matchPoint == System.Drawing.Point.Empty)
+                        if (!HopiBot.Hack.Utils.ImageHelper.TryLocatePatternWithBlur(regionBitmap, template, out var matchPoint, out var score, blurKernel))
                         {
                             continue;
                         }
 
+                        if (score < matchThreshold || score <= bestScore)
+                        {
+                            continue;
+                        }
+
+                        bestScore = score;
                         foundPoint = new System.Drawing.Point(
                             searchRect.Left + matchPoint.X + template.Width / 2,
                             searchRect.Top + matchPoint.Y + template.Height / 2);
-                        break;
                     }
                 }
             }

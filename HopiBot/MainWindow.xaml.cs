@@ -224,8 +224,10 @@ namespace HopiBot
 
         private static IntPtr FindWeGameWindow()
         {
-            var processWindow = Process.GetProcessesByName("wegame").FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero)?.MainWindowHandle
-                                ?? Process.GetProcessesByName("WeGame").FirstOrDefault(p => p.MainWindowHandle != IntPtr.Zero)?.MainWindowHandle;
+            var processWindow = Process.GetProcessesByName("wegame")
+                                  .Concat(Process.GetProcessesByName("WeGame"))
+                                  .Select(p => p.MainWindowHandle)
+                                  .FirstOrDefault(h => h != IntPtr.Zero);
             if (processWindow != IntPtr.Zero)
             {
                 return processWindow;

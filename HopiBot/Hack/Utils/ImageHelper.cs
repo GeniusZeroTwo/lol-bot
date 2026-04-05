@@ -19,8 +19,8 @@ namespace HopiBot.Hack.Utils
             // 将图像转换为灰度图像
             Mat largeImageGray = new Mat();
             Mat templateGray = new Mat();
-            Cv2.CvtColor(largeImage, largeImageGray, ColorConversionCodes.BGR2BGRA);
-            Cv2.CvtColor(template, templateGray, ColorConversionCodes.BGR2BGRA);
+            Cv2.CvtColor(largeImage, largeImageGray, ColorConversionCodes.BGR2GRAY);
+            Cv2.CvtColor(template, templateGray, ColorConversionCodes.BGR2GRAY);
 
             Mat result = new Mat();
             Cv2.MatchTemplate(largeImageGray, templateGray, result, TemplateMatchModes.CCorrNormed);
@@ -28,6 +28,34 @@ namespace HopiBot.Hack.Utils
 
 
             Console.WriteLine($"MinVal: {minVal}, MaxVal: {maxVal}, MatchLoc: {matchLoc}");
+            if (maxVal < threshold)
+            {
+                return Point.Empty;
+            }
+
+            return new Point(matchLoc.X, matchLoc.Y);
+        }
+
+        public static Point LocatePatternWithBlur(Bitmap large, Bitmap pattern, double threshold = 0.5, int blurKernel = 7)
+        {
+            var largeImage = OpenCvSharp.Extensions.BitmapConverter.ToMat(large);
+            var template = OpenCvSharp.Extensions.BitmapConverter.ToMat(pattern);
+
+            var largeGray = new Mat();
+            var templateGray = new Mat();
+            Cv2.CvtColor(largeImage, largeGray, ColorConversionCodes.BGR2GRAY);
+            Cv2.CvtColor(template, templateGray, ColorConversionCodes.BGR2GRAY);
+
+            var kernelSize = blurKernel % 2 == 0 ? blurKernel + 1 : blurKernel;
+            kernelSize = Math.Max(3, kernelSize);
+            Cv2.GaussianBlur(largeGray, largeGray, new OpenCvSharp.Size(kernelSize, kernelSize), 0);
+            Cv2.GaussianBlur(templateGray, templateGray, new OpenCvSharp.Size(kernelSize, kernelSize), 0);
+
+            var result = new Mat();
+            Cv2.MatchTemplate(largeGray, templateGray, result, TemplateMatchModes.CCoeffNormed);
+            Cv2.MinMaxLoc(result, out _, out var maxVal, out _, out var matchLoc);
+
+            Console.WriteLine($"BlurMatch MaxVal: {maxVal}, MatchLoc: {matchLoc}");
             if (maxVal < threshold)
             {
                 return Point.Empty;

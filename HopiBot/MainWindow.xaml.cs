@@ -211,16 +211,16 @@ namespace HopiBot
             Controller.LeftClick(new RatioPoint(weGameRect.Left + 27, weGameRect.Top + 300));
             Thread.Sleep(1000);
 
-            if (!TryLeftClickStartTextByOcr(weGameRect))
+            if (!TryLeftClickStartButtonByFuzzyImage(weGameRect))
             {
-                MessageBox.Show("OCR 未在指定区域识别到“启动”文字");
+                MessageBox.Show("模糊图像识别未在指定区域匹配到“启动”按钮");
                 return false;
             }
             Thread.Sleep(1000);
 
-            if (!WaitForLeagueClientStart(60))
+            if (!WaitForLeagueClientStart(240))
             {
-                MessageBox.Show("等待英雄联盟客户端启动超时");
+                MessageBox.Show("等待英雄联盟客户端启动超时（4分钟）");
                 return false;
             }
 
@@ -254,7 +254,7 @@ namespace HopiBot
             return FindWindow("CefTopWindow", null);
         }
 
-        private bool TryLeftClickStartTextByOcr(HopiBot.Hack.Utils.RECT weGameRect)
+        private bool TryLeftClickStartButtonByFuzzyImage(HopiBot.Hack.Utils.RECT weGameRect)
         {
             const int searchLeft = 900;
             const int searchTop = 600;
@@ -275,11 +275,11 @@ namespace HopiBot
                     g.CopyFromScreen(searchRect.Location, System.Drawing.Point.Empty, searchRect.Size);
                 }
 
-                foreach (var template in BuildStartTextTemplates())
+                foreach (var template in BuildStartButtonTemplates())
                 {
                     using (template)
                     {
-                        var matchPoint = HopiBot.Hack.Utils.ImageHelper.LocatePattern(regionBitmap, template, 0.55);
+                        var matchPoint = HopiBot.Hack.Utils.ImageHelper.LocatePatternWithBlur(regionBitmap, template, 0.48, 9);
                         if (matchPoint == System.Drawing.Point.Empty)
                         {
                             continue;
@@ -302,7 +302,7 @@ namespace HopiBot
             return true;
         }
 
-        private static IEnumerable<System.Drawing.Bitmap> BuildStartTextTemplates()
+        private static IEnumerable<System.Drawing.Bitmap> BuildStartButtonTemplates()
         {
             var fonts = new[] { "Microsoft YaHei", "SimHei", "Arial Unicode MS" };
             var sizes = new[] { 22f, 24f, 26f, 28f, 30f, 32f };

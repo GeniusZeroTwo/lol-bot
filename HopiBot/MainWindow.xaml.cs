@@ -58,17 +58,13 @@ namespace HopiBot
                 }
             };
 
-            RefreshClientData(false);
+            RefreshClientData();
         }
 
-        private bool RefreshClientData(bool showMessage = true)
+        private bool RefreshClientData()
         {
             if (!ClientApi.CheckConnection())
             {
-                if (showMessage)
-                {
-                    MessageBox.Show("无法连接游戏客户端");
-                }
                 ChampCb.ItemsSource = new List<Champion>();
                 ChampCb.SelectedIndex = -1;
                 return false;
@@ -218,9 +214,9 @@ namespace HopiBot
             }
             Thread.Sleep(1000);
 
-            if (!WaitForLeagueClientStart(240))
+            if (!WaitForLeagueClientStart(180))
             {
-                MessageBox.Show("等待英雄联盟客户端启动超时（4分钟）");
+                MessageBox.Show("等待英雄联盟客户端启动超时（3分钟）");
                 return false;
             }
 

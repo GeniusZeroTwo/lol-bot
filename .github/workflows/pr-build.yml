@@ -10,10 +10,12 @@ jobs:
   build:
     name: Build (net48 / Windows)
     runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2

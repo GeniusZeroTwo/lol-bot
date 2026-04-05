@@ -1,39 +1,46 @@
-name: Build and Test
+name: Build and Package
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
-
-# Opt all jobs in this workflow into Node.js 24 immediately.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Install NuGet
-      uses: nuget/setup-nuget@v1  # 修正为 v1（v3 不存在）
-    - name: Restore NuGet packages
-      run: nuget restore HopiBot/HopiBot.csproj -SolutionDirectory "$(pwd)"
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
-    - name: Build
-      run: msbuild HopiBot/HopiBot.csproj /t:Rebuild /p:Configuration=Release
-    - name: Create artifacts directory
-      # Use a Windows-safe command to create the directory idempotently
-      run: New-Item -ItemType Directory -Force artifacts
-    - name: Copy build outputs to artifacts
-      run: |
-        robocopy "HopiBot\bin\Release" "artifacts" /S /E
-      continue-on-error: true
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: HopiBot-Release
-        path: artifacts/
-        retention-days: 30
+      - uses: actions/checkout@v4
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore HopiBot.sln
+
+      - name: Build (Release)
+        run: msbuild HopiBot.sln /m /p:Configuration=Release /p:Platform="Any CPU"
+
+      - name: Prepare package directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item -Path "HopiBot/bin/Release/*" -Destination "artifacts" -Recurse -Force
+
+      - name: Create zip package
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "artifacts/*" -DestinationPath "HopiBot-Release.zip" -Force
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HopiBot-Release
+          path: HopiBot-Release.zip
+          retention-days: 30
